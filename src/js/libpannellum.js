@@ -860,15 +860,10 @@ function Renderer(container, context) {
             var isPreview = (typeof image.shtHash !== 'undefined') ||
                 (typeof image.equirectangularThumbnail !== 'undefined');
             var drawPreview = isPreview;
-            if (isPreview && program.currentNodes.length >= 6) {
-                drawPreview = false;
-                for (var i = 0; i < 6; i++) {
-                    if (!program.currentNodes[i].textureLoaded) {
-                        drawPreview = true;
-                        break;
-                    }
-                }
-            }
+            /*
+                Changed to always draw preview is available to prevent
+                preview changing to black before all tiles are loaded
+            */
             if (drawPreview) {
                 gl.useProgram(previewProgram);
                 gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
@@ -969,8 +964,12 @@ function Renderer(container, context) {
             } else {
                 if (params.returnImage.toString().indexOf('image/') == 0)
                     return canvas.toDataURL(params.returnImage);
-                else
-                    return canvas.toDataURL('image/png'); // Old default
+                else {
+                    /*
+                        Changed because this improves performance
+                    */
+                    return canvas.toDataURL('image/jpg', 0.25); // Old default
+                }
             }
         }
     };
@@ -1080,8 +1079,12 @@ function Renderer(container, context) {
                 // This optimization that doesn't draw a node if all its children
                 // will be drawn ignores the fact that some nodes don't have
                 // four children; these tiles are always drawn.
-                if (program.currentNodes[i].textureLoaded > 1 &&
-                    node_paths[program.currentNodes[i].path] != 4) {
+                /*
+                    Changed so this optimization is disabled. This allows for
+                    lower latency drawing. Possibly slightly lower performance but
+                    significantly faster image tile loading
+                */
+                if (program.currentNodes[i].textureLoaded > 1) {
                     //var color = program.currentNodes[i].color;
                     //gl.uniform4f(program.colorUniform, color[0], color[1], color[2], 1.0);
                     
@@ -1518,7 +1521,12 @@ function Renderer(container, context) {
 
     // Load images in separate thread when possible
     var processNextTile;
-    if (window.Worker && window.createImageBitmap) {
+    /*
+        Changed to not use workers for image fetching.
+        Possibly lower throughput but much lower latency which is
+        more desireable with this use case.
+    */
+    if (false) {
         function workerFunc() {
             self.onmessage = function(e) {
                 var path = e.data[0],

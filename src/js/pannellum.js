@@ -1912,7 +1912,11 @@ function createHotSpot(hs) {
         a.appendChild(div);
     } else {
         if (hs.sceneId) {
-            div.onclick = div.ontouchend = function() {
+            /*
+                Changed to prevent arrow navigation when panning around
+                viewer using touchscreen
+            */
+            div.onclick = function() { 
                 if (!div.clicked) {
                     div.clicked = true;
                     loadScene(hs.sceneId, hs.targetPitch, hs.targetYaw, hs.targetHfov);
