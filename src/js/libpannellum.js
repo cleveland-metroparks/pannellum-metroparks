@@ -861,7 +861,7 @@ function Renderer(container, context) {
                 (typeof image.equirectangularThumbnail !== 'undefined');
             var drawPreview = isPreview;
             /*
-                Changed to always draw preview is available to prevent
+                Changed to always draw preview if available to prevent
                 preview changing to black before all tiles are loaded
             */
             if (drawPreview) {
