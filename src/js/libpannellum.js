@@ -968,7 +968,7 @@ function Renderer(container, context) {
                     /*
                         Changed because this improves performance
                     */
-                    return canvas.toDataURL('image/jpg', 0.25); // Old default
+                    return canvas.toDataURL('image/jpg', 0.5); // Old default
                 }
             }
         }
