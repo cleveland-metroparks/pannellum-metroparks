@@ -76,6 +76,8 @@ If set to `true`, device orientation control will be used when the panorama is
 loaded, if the device supports it. If false, device orientation control needs
 to be activated by pressing a button. Defaults to `false`. Note that a secure
 HTTPS connection is required for device orientation access in most browsers.
+Additionally, this feature does not work in combination with `autoLoad: true`
+in most browsers, since a user interaction is required to prompt for permission.
 
 
 ### `showZoomCtrl` (boolean)
@@ -333,8 +335,8 @@ spot tooltip DOM instead of the default function. The contents of
 #### `clickHandlerFunc` (function) and `clickHandlerArgs` (object)
 
 If `clickHandlerFunc` is specified, this function is added as an event handler
-for the hot spot's `click` event. The event object and the contents of
-`clickHandlerArgs` are passed to the function as arguments.
+for the hot spot's `click`, `pointerup`, and `touchend` events. The event object
+and the contents of `clickHandlerArgs` are passed to the function as arguments.
 
 #### `draggable`
 
@@ -348,12 +350,13 @@ when dragging of the hotspot starts and ends. The event object and the contents 
 event object are: `mousedown`, `pointerdown`, `touchend`, `pointerup`, `pointerleave`, 
 `mouseup`, and `mouseleave`.
 
-#### `scale` (boolean)
+#### `scale` (boolean or number)
 
 When `true`, the hot spot is scaled to match changes in the field of view,
 relative to the initial field of view. Note that this does not account for
 changes in local image scale that occur due to distortions within the viewport.
-Defaults to `false`.
+If set to a number, a fixed scaling is applied relative to the default hot spot
+size. Defaults to `false`.
 
 ### `hotSpotDebug` (boolean)
 

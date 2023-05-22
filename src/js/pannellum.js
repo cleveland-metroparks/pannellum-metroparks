@@ -68,6 +68,7 @@ var config,
     externalEventListeners = {},
     specifiedPhotoSphereExcludes = [],
     update = false, // Should we update when still to render dynamic content
+    updateOnce = false,
     eps = 1e-6,
     resizeObserver,
     hotspotsCreated = false,
@@ -1650,7 +1651,9 @@ function render() {
             maxPitch = 90;
         config.pitch = Math.max(minPitch, Math.min(maxPitch, config.pitch));
         
-        renderer.render(config.pitch * Math.PI / 180, config.yaw * Math.PI / 180, config.hfov * Math.PI / 180, {roll: config.roll * Math.PI / 180});
+        renderer.render(config.pitch * Math.PI / 180, config.yaw * Math.PI / 180, config.hfov * Math.PI / 180, {roll: config.roll * Math.PI / 180, dynamic: update});
+        if (updateOnce)
+            updateOnce = update = false;
         
         renderHotSpots();
         
@@ -1783,14 +1786,15 @@ function renderInit() {
             params.horizonRoll = config.horizonRoll * Math.PI / 180;
         if (config.backgroundColor !== undefined)
             params.backgroundColor = config.backgroundColor;
-        renderer.init(panoImage, config.type, config.dynamic, config.haov * Math.PI / 180, config.vaov * Math.PI / 180, config.vOffset * Math.PI / 180, renderInitCallback, params);
+        renderer.init(panoImage, config.type, config.haov * Math.PI / 180, config.vaov * Math.PI / 180, config.vOffset * Math.PI / 180, renderInitCallback, params);
+    } catch(event) {
+        // Panorama not loaded
+
         if (config.dynamic !== true) {
             // Allow image to be garbage collected
             panoImage = undefined;
         }
-    } catch(event) {
-        // Panorama not loaded
-        
+
         // Display error if there is a bad texture
         if (event.type == 'webgl error' || event.type == 'no webgl') {
             anError();
@@ -1839,6 +1843,11 @@ function renderInitCallback() {
         preview = undefined;
     }
     loaded = true;
+
+    if (config.dynamic !== true) {
+        // Allow image to be garbage collected
+        panoImage = undefined;
+    }
     
     animateInit();
 
@@ -1856,6 +1865,7 @@ function createHotSpot(hs) {
     hs.yaw = Number(hs.yaw) || 0;
 
     var div = document.createElement('div');
+    div.tabIndex = -1;
     div.className = 'pnlm-hotspot-base';
     if (hs.cssClass)
         div.className += ' ' + hs.cssClass;
@@ -2078,7 +2088,10 @@ function renderHotSpot(hs) {
         var transform = 'translate(' + coord[0] + 'px, ' + coord[1] +
             'px) translateZ(9999px) rotate(' + config.roll + 'deg)';
         if (hs.scale) {
-            transform += ' scale(' + (origHfov/config.hfov) / z + ')';
+            if (typeof hs.scale == 'number')
+                transform += ' scale(' + hs.scale + ')';
+            else
+                transform += ' scale(' + (origHfov/config.hfov) / z + ')';
         }
         hs.div.style.webkitTransform = transform;
         hs.div.style.MozTransform = transform;
@@ -3057,6 +3070,24 @@ this.getRenderer = function() {
  */
 this.setUpdate = function(bool) {
     update = bool === true;
+    if (update) {
+        updateOnce = false;
+        if (renderer === undefined)
+            onImageLoad();
+        else
+            animateInit();
+    }
+    return this;
+};
+
+/**
+ * Sets update flag for dynamic content for one frame.
+ * @memberof Viewer
+ * @instance
+ * @returns {Viewer} `this`
+ */
+this.updateOnce = function() {
+    update = updateOnce = true;
     if (renderer === undefined)
         onImageLoad();
     else
