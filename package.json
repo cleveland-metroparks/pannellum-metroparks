@@ -1,20 +1,20 @@
 {
-  "name": "pannellum",
-  "description": "Pannellum is a lightweight, free, and open source panorama viewer for the web.",
-  "version": "2.5.6",
-  "bugs": {
-    "url": "https://github.com/mpetroff/pannellum/issues"
-  },
-  "author": {
-    "name": "Matthew Petroff",
-    "url": "https://mpetroff.net/"
+  "name": "@cmparks/pannellum",
+  "description": "Pannellum is a lightweight, free, and open source panorama viewer for the web. Modified for use by Cleveland Metroparks",
+  "version": "2.6.0",
+  "exports": {
+      "./build/pannellum.js": {
+        "default": "./build/pannellum.js"
+      },
+      "./build/pannellum.css": {
+        "default": "./build/pannellum.css"
+      }
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/mpetroff/pannellum.git"
+    "url": "https://github.com/orosmatthew/pannellum-metroparks"
   },
   "license": "MIT",
-  "homepage": "https://pannellum.org/",
   "main": "build/pannellum.js",
   "keywords": [
     "panorama",
