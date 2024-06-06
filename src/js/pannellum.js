@@ -1,6 +1,6 @@
 /*
  * Pannellum - An HTML5 based Panorama Viewer
- * Copyright (c) 2011-2022 Matthew Petroff
+ * Copyright (c) 2011-2024 Matthew Petroff
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -629,11 +629,11 @@ function parseGPanoXMP(image, url) {
                         config.horizonRoll = xmp.horizonRoll;
                 }
                 
-                if (xmp.pitch != null && specifiedPhotoSphereExcludes.indexOf('pitch') < 0)
+                if (xmp.pitch !== null && specifiedPhotoSphereExcludes.indexOf('pitch') < 0)
                     config.pitch = xmp.pitch;
-                if (xmp.yaw != null && specifiedPhotoSphereExcludes.indexOf('yaw') < 0)
+                if (xmp.yaw !== null && specifiedPhotoSphereExcludes.indexOf('yaw') < 0)
                     config.yaw = xmp.yaw;
-                if (xmp.hfov != null && specifiedPhotoSphereExcludes.indexOf('hfov') < 0)
+                if (xmp.hfov !== null && specifiedPhotoSphereExcludes.indexOf('hfov') < 0)
                     config.hfov = xmp.hfov;
             }
         }
@@ -2115,7 +2115,7 @@ function renderHotSpots() {
 function mergeConfig(sceneId) {
     config = {};
     var k, s;
-    var photoSphereExcludes = ['haov', 'vaov', 'vOffset', 'northOffset', 'horizonPitch', 'horizonRoll'];
+    var photoSphereExcludes = ['haov', 'vaov', 'vOffset', 'northOffset', 'horizonPitch', 'horizonRoll', 'pitch', 'yaw', 'hfov'];
     specifiedPhotoSphereExcludes = [];
     
     // Merge default config

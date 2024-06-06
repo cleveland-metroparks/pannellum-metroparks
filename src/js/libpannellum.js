@@ -1,6 +1,6 @@
 /*
  * libpannellum - A WebGL and CSS 3D transform based Panorama Renderer
- * Copyright (c) 2012-2022 Matthew Petroff
+ * Copyright (c) 2012-2024 Matthew Petroff
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -658,6 +658,28 @@ function Renderer(container, context) {
                 gl.vertexAttribPointer(program.vertPosLocation, 3, gl.FLOAT, false, 0, 0);
                 gl.useProgram(program);
             }
+
+            // Parse missing tiles list, if it exists
+            if (image.missingTiles) {
+                var missingTiles = [];
+                var perSide = image.missingTiles.split('!');
+                var level = -1;
+                for (var i = 1; i < perSide.length; i++) {
+                    var side = perSide[i].at(0);
+                    var perLevel = perSide[i].indexOf('>') < 0 ? [side, perSide[i].slice(1)] : perSide[i].split('>');
+                    for (var j = 1; j < perLevel.length; j++) {
+                        if (perSide[i].indexOf('>') >= 0)
+                            var level = shtB83decode(perLevel[j].at(0), 1)[0];
+                        var maxTileNum = Math.ceil(image.cubeResolution /
+                            Math.pow(2, image.maxLevel - level) / image.tileResolution) - 1;
+                        var numTileDigits = Math.ceil(Math.log(maxTileNum + 1) / Math.log(83));
+                        var tiles = perLevel[j].slice(1).length > 0 ? shtB83decode(perLevel[j].slice(1), numTileDigits) : [0, 0];
+                        for (var k = 0; k < tiles.length / 2; k++)
+                            missingTiles.push([side, level, tiles[k * 2], tiles[k * 2 + 1]].toString());
+                    }
+                }
+                image.missingTileList = missingTiles;
+            }
         }
 
         // Check if there was an error
@@ -1068,24 +1090,20 @@ function Renderer(container, context) {
             // Clear canvas
             if (clear)
                 gl.clear(gl.COLOR_BUFFER_BIT);
+
             // Determine tiles that need to be drawn
             var node_paths = {};
             for (var i = 0; i < program.currentNodes.length; i++) {
                 if (node_paths[program.currentNodes[i].parentPath] === undefined)
                     node_paths[program.currentNodes[i].parentPath] = 0
-                node_paths[program.currentNodes[i].parentPath] += !(program.currentNodes[i].textureLoaded > 1); // !(undefined > 1) != (undefined <= 1)
+                node_paths[program.currentNodes[i].parentPath] += program.currentNodes[i].textureLoaded > 1;
             }
             // Draw tiles
             for (var i = 0; i < program.currentNodes.length; i++) {
-                // This optimization that doesn't draw a node if all its children
-                // will be drawn ignores the fact that some nodes don't have
-                // four children; these tiles are always drawn.
-                /*
-                    Changed so this optimization is disabled. This allows for
-                    lower latency drawing. Possibly slightly lower performance but
-                    significantly faster image tile loading
-                */
-                if (program.currentNodes[i].textureLoaded > 1) {
+                // This optimization doesn't draw a node if all its children
+                // will be drawn
+                if (program.currentNodes[i].textureLoaded > 1 &&
+                    node_paths[program.currentNodes[i].path] != program.currentNodes[i].numChildren) {
                     //var color = program.currentNodes[i].color;
                     //gl.uniform4f(program.colorUniform, color[0], color[1], color[2], 1.0);
                     
@@ -1138,6 +1156,11 @@ function Renderer(container, context) {
      * @param {number} hfov - Horizontal field of view to check at.
      */
     function testMultiresNode(rotPersp, rotPerspNoClip, node, pitch, yaw, hfov) {
+        // Don't try to load missing tiles (I wish there were a better way to check than `toString`)
+        if (image.missingTileList !== undefined &&
+            image.missingTileList.indexOf([node.side, node.level, node.x, node.y].toString()) >= 0)
+            return;
+
         if (checkSquareInView(rotPersp, node.vertices)) {
             // In order to determine if this tile resolution needs to be loaded
             // for this node, start by calculating positions of node corners
@@ -1272,6 +1295,7 @@ function Renderer(container, context) {
                             f3 = 0;
                             i3 = 1;
                         }
+                        node.numChildren = 2;
                     }
                     if (node.y == numTiles) {
                         f2 = 0;
@@ -1280,7 +1304,12 @@ function Renderer(container, context) {
                             f3 = 0;
                             i3 = 1;
                         }
+                        node.numChildren = 2;
                     }
+                    if (node.x == numTiles && node.y == numTiles)
+                        node.numChildren = 1;
+                } else {
+                    node.numChildren = 4;
                 }
                 
                 vtmp = new Float32Array([
@@ -1325,6 +1354,8 @@ function Renderer(container, context) {
                 for (var j = 0; j < children.length; j++) {
                     testMultiresNode(rotPersp, rotPerspNoClip, children[j], pitch, yaw, hfov);
                 }
+            } else {
+                node.numChildren = 0;
             }
         }
     }

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
-# Requires Python 3.2+, the Python Pillow and NumPy packages, and
+# Requires Python 3.3+, the Python Pillow and NumPy packages, and
 # nona (from Hugin). The Python pyshtools package is also needed for creating
 # spherical-harmonic-transform previews (which are recommended).
 
 # generate.py - A multires tile set generator for Pannellum
 # Extensions to cylindrical input and partial panoramas by David von Oheimb
-# Copyright (c) 2014-2022 Matthew Petroff
+# Copyright (c) 2014-2024 Matthew Petroff
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -34,7 +34,7 @@ import os
 import sys
 import math
 import ast
-from distutils.spawn import find_executable
+from shutil import which as find_executable
 import subprocess
 import base64
 import io
@@ -61,6 +61,14 @@ try:
 except:
     sys.stderr.write("Unable to import pyshtools. Not generating SHT preview.\n")
 
+b83chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz#$%*+,-.:;=?@[]^_{|}~"
+def b83encode(vals, length):
+    result = ""
+    for val in vals:
+        for i in range(1, length + 1):
+            result += b83chars[int(val // (83 ** (length - i))) % 83]
+    return result
+
 def img2shtHash(img, lmax=5):
     '''
     Create spherical harmonic transform (SHT) hash preview.
@@ -73,15 +81,6 @@ def img2shtHash(img, lmax=5):
         quantG = encodeFloat(g / maxVal, 9)
         quantB = encodeFloat(b / maxVal, 9)
         return quantR * 19 ** 2 + quantG * 19 + quantB
-
-    b83chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz#$%*+,-.:;=?@[]^_{|}~"
-
-    def b83encode(vals, length):
-        result = ""
-        for val in vals:
-            for i in range(1, length + 1):
-                result += b83chars[int(val // (83 ** (length - i))) % 83]
-        return result
 
     # Calculate SHT coefficients
     r = pysh.expand.SHExpandDH(img[..., 0], sampling=2, lmax_calc=lmax)
@@ -198,7 +197,7 @@ else:
     cubeSize = 8 * int((360 / haov) * origWidth / math.pi / 8)
 tileSize = min(args.tileSize, cubeSize)
 levels = int(math.ceil(math.log(float(cubeSize) / tileSize, 2))) + 1
-if round(cubeSize / 2**(levels - 2)) == tileSize:
+if int(cubeSize / 2**(levels - 2)) == tileSize:
     levels -= 1  # Handle edge case
 origHeight = str(origHeight)
 origWidth = str(origWidth)
@@ -209,6 +208,10 @@ if args.png:
 partialPano = True if args.haov != -1 and args.vaov != -1 else False
 colorList = ast.literal_eval(args.backgroundColor)
 colorTuple = (int(colorList[0]*255), int(colorList[1]*255), int(colorList[2]*255))
+
+# Don't generate preview for partial panoramas
+if haov < 360 or vaov < 180:
+    genPreview = False
 
 if args.debug:
     print('maxLevel: '+ str(levels))
@@ -243,6 +246,7 @@ faces = ['face0000.tif', 'face0001.tif', 'face0002.tif', 'face0003.tif', 'face00
 
 # Generate tiles
 print('Generating tiles...')
+missingTiles = []
 for f in range(0, 6):
     size = cubeSize
     faceExists = os.path.exists(os.path.join(args.output, faces[f]))
@@ -271,8 +275,44 @@ for f in range(0, 6):
                             background = Image.new(tile.mode[:-1], tile.size, colorTuple)
                             background.paste(tile, tile.split()[-1])
                             tile = background
-                        tile.save(os.path.join(args.output, str(level), faceLetters[f] + str(i) + '_' + str(j) + extension), quality=args.quality)
+                        colors = tile.getcolors(1)
+                        if not genPreview and colors is not None and colors[0][1] == colorTuple:
+                            missingTiles.append((f, level, j, i))
+                        else:
+                            tile.save(os.path.join(args.output, str(level), faceLetters[f] + str(i) + '_' + str(j) + extension), quality=args.quality)
+                    else:
+                        missingTiles.append((f, level, j, i))
             size = int(size / 2)
+    else:
+        missingTiles.append((f, level, 0, 0))
+
+# Tell viewer not to load missing tiles
+if len(missingTiles) > 0:
+    # Remove children of missing tiles, since they won't be loaded anyway
+    tilesToRemove = []
+    for t in missingTiles:
+        tilesToRemove.append((t[0], t[1] + 1, t[2] * 2, t[3] * 2))
+        tilesToRemove.append((t[0], t[1] + 1, t[2] * 2, t[3] * 2 + 1))
+        tilesToRemove.append((t[0], t[1] + 1, t[2] * 2 + 1, t[3] * 2))
+        tilesToRemove.append((t[0], t[1] + 1, t[2] * 2 + 1, t[3] * 2 + 1))
+    for t in tilesToRemove:
+        if t in missingTiles:
+            missingTiles.pop(missingTiles.index(t))
+    # Encode missing tile list as string
+    missingTilesStr = ''
+    prevFace = prevLevel = None
+    for missingTile in sorted(missingTiles):
+        face = missingTile[0]
+        level = missingTile[1]
+        if face != prevFace:
+            missingTilesStr += '!' + faceLetters[face]
+        if level != prevLevel:
+            missingTilesStr += '>' + b83encode([level], 1)
+            maxTileNum = math.ceil(cubeSize / 2**(levels - level) / tileSize) - 1
+            numTileDigits = math.ceil(math.log(maxTileNum + 1, 83))
+        missingTilesStr += b83encode(missingTile[2:], numTileDigits)
+        prevFace = face
+        prevLevel = level
 
 # Generate fallback tiles
 if args.fallbackSize > 0:
@@ -297,8 +337,6 @@ if not args.debug:
             os.remove(os.path.join(args.output, face))
 
 # Generate preview (but not for partial panoramas)
-if haov < 360 or vaov < 180:
-    genPreview = False
 if genPreview:
     # Generate SHT-hash preview
     shtHash = img2shtHash(np.array(Image.open(args.inputFile).resize((1024, 512))))
@@ -328,7 +366,7 @@ if vaov < 180:
     text.append('       "pitch": ' + str(        args.vOffset)+ ',')
     text.append('    "maxPitch": ' + str(+vaov/2+args.vOffset)+ ',')
 if colorTuple != (0, 0, 0):
-    text.append('    "backgroundColor": "' + args.backgroundColor+ '",')
+    text.append('    "backgroundColor": ' + args.backgroundColor+ ',')
 if args.avoidbackground and (haov < 360 or vaov < 180):
     text.append('    "avoidShowingBackground": true,')
 if args.autoload:
@@ -339,6 +377,8 @@ if genPreview:
     text.append('        "shtHash": "' + shtHash + '",')
 if args.thumbnailSize > 0:
     text.append('        "equirectangularThumbnail": "' + equiPreview + '",')
+if len(missingTiles) > 0:
+    text.append('        "missingTiles": "' + missingTilesStr + '",')
 text.append('        "path": "/%l/%s%y_%x",')
 if args.fallbackSize > 0:
     text.append('        "fallbackPath": "/fallback/%s",')
